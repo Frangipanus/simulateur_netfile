@@ -30,6 +30,8 @@ au début de la simulation.
 J'ai choisit d'avoir plusieur RAMs et ROMs. Ainsi, il y a 3 tables de hashage pour la mémoire: celle des registres, celle des RAMs et celle des ROMs. Elle sont a chaque fois identifié par leur nom (donc un ident). 
 ### 3. Mise à jour de la mémoire
 Comme préciser plus tot, on ecrit dans les registres et dans la RAM qu'en fin de cycle, après avoir imprimé les outputs demandés.
+### 4. Select
+On décide que on va 0 indicer
 
 ## Compilation 
 Taper d'abord 

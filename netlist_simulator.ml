@@ -87,7 +87,7 @@ let concat arr1 arr2 =
 let slice arr ind1 ind2 = 
   let res = Array.make (ind2 - ind1 + 1) true in 
   for i = ind1 to ind2 do 
-    res.(i-ind1) <- arr.(i)
+    res.(i-ind1) <- arr.(i-1)
   done;
   res
 
