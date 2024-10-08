@@ -2,7 +2,7 @@ open Scheduler
 open Netlist_ast
 open Graph
 
-
+let oc = open_out "simulaor.c"
 let print_only = ref false
 let number_steps = ref (3)
 let bool_of_int n = 
@@ -108,11 +108,15 @@ let deal_with_exp exp table types registre rams roms  =
 
   match eq with 
   |Earg(elem) -> (match elem with 
-                  |Avar(id) -> Hashtbl.add table name (Hashtbl.find table id) 
-                  |Aconst(value)-> Hashtbl.add table name value)
+                    |Avar(id) -> (Printf.fprintf oc "%s = %s" name id)
+                    |Aconst(value)-> (match value with 
+                                      |VBit(s) -> Printf.fprintf oc "%s = %d" name (int_of_bool s)
+                                      |VBitArray(n)-> let acc = Array.fold_right (fun  elem i -> i*2 + (int_of_bool elem)) n 0 in Printf.fprintf oc "%s = %d" name acc) )
   |Enot(elem) -> (match  elem with
-                | Aconst(value) -> Hashtbl.add table name (not_cal value) 
-                | Avar(id) ->  Hashtbl.add table name (not_cal (Hashtbl.find table id) ) ) 
+                | Aconst(value) -> (match value with 
+                                      |VBit(s) -> Printf.fprintf oc "%s = ~%d" name (int_of_bool s)
+                                      |VBitArray(n)-> let acc = Array.fold_right (fun  elem i -> i*2 + (int_of_bool elem)) n 0 in Printf.fprintf oc "%s = ~%d" name acc)
+                | Avar(id) ->  Printf.fprintf oc "%s = ~%s" name id)
   |Ebinop(ope, arg1, arg2) -> (match arg1, arg2 with 
                                 | Avar(id1), Avar(id2) -> Hashtbl.add table name (cal_ope ope (Hashtbl.find table id1) (Hashtbl.find table id2))
                                 | Avar(id1), Aconst(val2) -> Hashtbl.add table name (cal_ope ope (Hashtbl.find table id1) val2)
@@ -255,94 +259,44 @@ let init_ram add_size word_size =
 
 
 let simulator program number_steps = 
+  Printf.printf "here\n";
+  Printf.fprintf oc "#include<stdlib.h>\n#include<stdio.h>\n#include<stdint.h>\n#include<inttypes.h>\n\n";
+  Printf.fprintf oc "uint64_t binaryToDecimal(uint64_t n){\n\tuint64_t num = n;\n\tuint64_t dec_value = 0;\n\tuint64_t base = 1;\n\tuint64_t temp = num;\n\twhile (temp) {\n\t\tuint64_t last_digit = temp %% 10;\n\t\ttemp = temp / 10;\n\t\tdec_value += last_digit * base;\n\t\tbase = base * 2;\n\t}\n\treturn dec_value;\n}\n";
+  Printf.fprintf oc "int expo(int n, int x){\n\tint res = x;\n\tfor (int i = 1; i < n; i ++){\n\t\tres = res * x;\n}\n\treturn res;\n\t}\n";
+  Printf.fprintf oc " int main(void){\n";
+ 
   let types = program.p_vars in 
   let prog_order = schedule program in 
-  let variables = Hashtbl.create 42 in 
-  let registres = Hashtbl.create 42 in 
-  let rams = Hashtbl.create 42 in 
-  let roms = Hashtbl.create 42 in 
   List.iter(fun (name, elem) -> match elem with 
-                          |Ereg(x) -> Hashtbl.add registres x (VBit(false))
-                          |Erom(add_size,word_size, _) -> Hashtbl.add roms name (init_rom add_size word_size (name ^ ".db"))
-                          |Eram(add_size, word_size, _,_,_,_) -> (Printf.printf " %s \n" name; Hashtbl.add rams name (init_ram add_size word_size))
+                          |Ereg(x) -> Printf.fprintf oc "\tuint64_t reg_%s_a = 0;\n\tuint64_t reg_%s_n;\n" name name;
+                          |Erom(add_size,word_size, _) -> (Printf.fprintf oc "\tint %s_add_size = %d;\n\tuint64_t rom_%s[expo(%s_add_size, 2)];\n"name add_size name name;
+                                                          Printf.fprintf oc "\tfor (int i = 0; i < %d; i++){\n\t\trom_%s[i] = 0;\n\t}\n" add_size name)
+                          |Eram(add_size, word_size, _,_,_,_) -> (Printf.fprintf oc "\tint %s_add_size = %d;\n\tuint64_t ram_%s[expo(%s_add_size, 2)];\n"name add_size name name;
+                                                                  Printf.fprintf oc "\tfor (int i = 0; i < %d; i++){\n\t\tram_%s[i] = 0;\n\t}\n" add_size name)
                           |_ -> ()) program.p_eqs;
-
-  for i = 0 to number_steps -1 do 
-    Printf.printf "Now starting step %d\n" i;
-   
+  Printf.fprintf oc "\tfor (uint64_t i = 0; i < %d; i = i + 1){\n"  number_steps;
+  
     List.iter (fun elem ->let length = 
                 match (Env.find  elem types ) with 
                   |TBit -> 1
                   |TBitArray(len) -> len 
                   in 
-                let ndone = ref true in 
-                while !ndone do  
-                  Printf.printf "\nDonnder la valeur de %s qui a une longeur %d: " elem length;
-                  let s = read_line() in 
-                  
-                  if (String.length ( s) = length) 
-                  then (ndone := false;
-                        if (length = 1) then 
-                        Hashtbl.add variables elem (VBit((bool_of_int (int_of_string s))))
-                      else begin 
-                        let acc = Array.make length true in 
-                        let st = (s) in 
-                        for i = 0 to length -1 do 
-                          acc.(i) <- bool_of_int (int_of_string (String.make 1 st.[i]));
-                        done;
-                        Hashtbl.add variables elem (VBitArray(acc))
-                      end)
-                                        
-                  else Printf.printf "Wrong size\n"
-                done
+                  Printf.fprintf oc "\t\tuint64_t %s;\n\t\tprintf(\"Donnder la valeur de %s qui a une longeur %d: \");\n\t\tscanf(\"%%ld\", &%s);\n \t\t%s = binaryToDecimal(%s);\n"elem elem length elem elem elem;
       ) prog_order.p_inputs;
-    List.iter (fun exp -> deal_with_exp exp variables types registres rams roms ) prog_order.p_eqs;
- 
-    List.iter (fun (name, elem) -> match elem with (*Met a jour les rams*) 
-                    |Eram (addr_size, word_size, read_addr, write_enable, write_addr, data) -> (let we1 = match write_enable with
-                                                                    | Avar(id1) -> Hashtbl.find variables id1 
-                                                                    |Aconst(val1) -> val1
-                                                                    in 
-                                                                    let we = match we1 with 
-                                                                    |VBit(s) -> s
-                                                                    |VBitArray(n) -> failwith "pas un bit mais un tableau"
-                                                                    in 
-                                                                   
-                                                                    let wa1 = match write_addr with
-                                                                    | Avar(id1) -> Hashtbl.find variables id1 
-                                                                    |Aconst(val1) -> val1
-                                                                    in 
-                                                                    let wa = match wa1 with 
-                                                                    |VBit(s) -> [|s|]
-                                                                    |VBitArray(n) -> n
-                                                                    in 
-                                                                    
-                                                                    let data1 = match data with
-                                                                    | Avar(id1) -> (Hashtbl.find variables id1 )
-                                                                    |Aconst(val1) -> val1
-                                                                    in 
-                                                                    
-                                                                    let dat = match data1 with 
-                                                                    |VBit(s) -> VBitArray([|s|])
-                                                                    |VBitArray(n) -> VBitArray(n)
-                                                                    in 
-                                                                    
-                                                                    
-                                                                    if we then ((Hashtbl.find rams name).(array_to_int wa) <- dat)
-                                                                    else () 
-)
-                          |_ -> ()
- 
-    ) prog_order.p_eqs;
-    List.iter (fun id -> match Hashtbl.find variables id with 
-                          |VBit(s) -> Printf.printf "%s = %d\n" id (int_of_bool s)
-                          |VBitArray(s) -> (Printf.printf "%s = " id; Array.iter (fun x-> Printf.printf("%d") (int_of_bool x)) s; Printf.printf "\n")) prog_order.p_outputs;
-    List.iter(fun (name, elem) -> match elem with (*Met a jour les registres*)
-                          |Ereg(x) -> Hashtbl.add registres x (Hashtbl.find variables x)
-                          |_ -> ()) prog_order.p_eqs;
-    
-    
-  done
+    (*List.iter (fun exp -> deal_with_exp exp variables types registres rams roms ) prog_order.p_eqs;*)
+
+    (*Mise a jour des rams*)
+    List.iter (fun (name, elem) -> match elem with 
+    |Eram (addr_size, word_size, _, _, _, _) -> Printf.fprintf oc "\t\t if(%s_we){\n\t\t\trom_%s[%s_wa] = %s_data ;\n\t\t}\n" name name name name;
+    | _ -> ())  prog_order.p_eqs;
+ (* print les res, mettre a jour les registres*)
+    List.iter (fun id -> Printf.fprintf oc "\t\tprintf(\"%s=%%ld\", %s );\n" id id) prog_order.p_outputs;
+    List.iter (fun (name, elem) -> match elem with 
+                |Ereg(x) -> (Printf.fprintf oc "\t\treg_%s_a = reg_%s_n;\n" name name) 
+                |_ -> ()) prog_order.p_eqs;
+  Printf.fprintf oc "} \n return 0;\n }";
+  
+  close_out oc
 
 let compile filename =
   try
