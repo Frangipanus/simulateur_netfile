@@ -24,14 +24,27 @@ int expo(int n, int x){
 	return res;
 	}
  int main(void){
-	uint64_t reg_o_a = 0;
-	uint64_t reg_o_n;
-	uint64_t reg__l_2_a = 0;
-	uint64_t reg__l_2_n;
 	for (uint64_t i = 0; i < 3; i = i + 1){
-		printf("o=%ld", o );
-		reg_o_a = reg_o_n;
-		reg__l_2_a = reg__l_2_n;
+		uint64_t a;
+		printf("Donnder la valeur de a qui a une longeur 1: ");
+		scanf("%ld", &a);
+ 		a = binaryToDecimal(a);
+		uint64_t b;
+		printf("Donnder la valeur de b qui a une longeur 1: ");
+		scanf("%ld", &b);
+ 		b = binaryToDecimal(b);
+		uint64_t c;
+		printf("Donnder la valeur de c qui a une longeur 1: ");
+		scanf("%ld", &c);
+ 		c = binaryToDecimal(c);
+uint64_t _l_1 = a ^ b;
+uint64_t s = _l_1 ^ c;
+uint64_t _l_3 = a && b;
+uint64_t _l_4 = a ^ b;
+uint64_t _l_5 = _l_4 && c;
+uint64_t r = _l_3 || _l_5;
+		printf("s=%ld\n", s );
+		printf("r=%ld\n", r );
 } 
  return 0;
  }

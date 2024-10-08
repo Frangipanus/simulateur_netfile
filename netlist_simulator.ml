@@ -102,119 +102,69 @@ let array_to_int arr=
   done; 
   !res
 
-let deal_with_exp exp table types registre rams roms  = 
+let string_of_ope binop = 
+  match binop with 
+  |Or -> " || "
+  |And -> " && "
+  |Xor -> " ^ "
+  |Nand -> ""
+
+let int_of_value value = 
+  match value with 
+  |VBit(s) -> int_of_bool s
+  |VBitArray(n) -> Array.fold_right (fun  elem i -> i*2 + (int_of_bool elem)) n 0
+
+let deal_with_exp exp  types   = 
   let (name, eq) = exp in 
   
 
   match eq with 
   |Earg(elem) -> (match elem with 
-                    |Avar(id) -> (Printf.fprintf oc "%s = %s" name id)
+                    |Avar(id) -> (Printf.fprintf oc "uint64_t %s = %s" name id)
                     |Aconst(value)-> (match value with 
-                                      |VBit(s) -> Printf.fprintf oc "%s = %d" name (int_of_bool s)
+                                      |VBit(s) -> Printf.fprintf oc "uint64_t %s = %d" name (int_of_bool s)
                                       |VBitArray(n)-> let acc = Array.fold_right (fun  elem i -> i*2 + (int_of_bool elem)) n 0 in Printf.fprintf oc "%s = %d" name acc) )
   |Enot(elem) -> (match  elem with
                 | Aconst(value) -> (match value with 
-                                      |VBit(s) -> Printf.fprintf oc "%s = ~%d" name (int_of_bool s)
+                                      |VBit(s) -> Printf.fprintf oc "uint64_t %s = ~%d" name (int_of_bool s)
                                       |VBitArray(n)-> let acc = Array.fold_right (fun  elem i -> i*2 + (int_of_bool elem)) n 0 in Printf.fprintf oc "%s = ~%d" name acc)
                 | Avar(id) ->  Printf.fprintf oc "%s = ~%s" name id)
   |Ebinop(ope, arg1, arg2) -> (match arg1, arg2 with 
-                                | Avar(id1), Avar(id2) -> Hashtbl.add table name (cal_ope ope (Hashtbl.find table id1) (Hashtbl.find table id2))
-                                | Avar(id1), Aconst(val2) -> Hashtbl.add table name (cal_ope ope (Hashtbl.find table id1) val2)
-                                | Aconst(val1), Avar(id1)-> Hashtbl.add table name (cal_ope ope (Hashtbl.find table id1) val1)
-                                |Aconst(val1), Aconst(val2) -> Hashtbl.add table name (cal_ope ope val1 val2)
+                                | Avar(id1), Avar(id2) -> (match ope with 
+                                                          | Nand -> Printf.fprintf oc "uint64_t %s = ~(%s&&%s);\n" name id1 id2
+                                                          | _ -> Printf.fprintf oc "uint64_t %s = %s%s%s;\n" name id1 (string_of_ope ope) id2)
+                                | Avar(id1), Aconst(val2) ->(match ope with 
+                                                          | Nand -> Printf.fprintf oc "uint64_t %s = ~(%s&&%d);\n" name id1 (int_of_value val2)
+                                                          | _ -> Printf.fprintf oc "uint64_t %s = %s%s%d;\n" name id1 (string_of_ope ope) (int_of_value val2))
+                                | Aconst(val1), Avar(id1)-> (match ope with 
+                                                          | Nand -> Printf.fprintf oc "uint64_t %s = ~(%s&&%d);\n" name id1 (int_of_value val1)
+                                                          | _ -> Printf.fprintf oc "uint64_t %s = %s%s%d;\n" name id1 (string_of_ope ope) (int_of_value val1))
+                                |Aconst(val1), Aconst(val2) -> (match ope with 
+                                                          | Nand -> Printf.fprintf oc "uint64_t %s = ~(%d&&%d);\n" name (int_of_value val1) (int_of_value val2)
+                                                          | _ -> Printf.fprintf oc "uint64_t %s = %d%s%d;\n" name (int_of_value val1) (string_of_ope ope) (int_of_value val2))
                                   )
   | Emux (choice, arg1, arg2) -> (
                                   match choice with 
-                                  |Avar(id) -> (let decision = 
-                                                match Hashtbl.find table id  with 
-                                                |VBit(s) -> s
-                                                |_ ->failwith "choice too big"
-                                                in 
-                                                if decision then (
-                                                  match arg2 with
-                                                    |Avar(id) -> Hashtbl.add table name (Hashtbl.find table id) 
-                                                    |Aconst(value)-> Hashtbl.add table name value)
-
-                                                  else (
-                                                    match arg1 with 
-                                                    |Avar(id) -> Hashtbl.add table name (Hashtbl.find table id) 
-                                                    |Aconst(value)-> Hashtbl.add table name value)
-                                                  ) 
-                                    
-                          
-                                  | Aconst(value) -> ( let decision = 
-                                                match  value  with 
-                                                |VBit(s) -> s
-                                                |_ ->failwith "choice too big"
-                                              in 
-                                              if decision then (
-                                                match arg2 with
-                                                  |Avar(id) -> Hashtbl.add table name (Hashtbl.find table id) 
-                                                  |Aconst(value)-> Hashtbl.add table name value)
-                                              
-                                                else (
-                                                  match arg1 with 
-                                                  |Avar(id) -> Hashtbl.add table name (Hashtbl.find table id) 
-                                                  |Aconst(value)-> Hashtbl.add table name value)
-                                                                        )
-  )
-  |Econcat(arg1, arg2) -> (let (arr1, arr2) = match arg1, arg2 with 
-                              |Avar(id1), Avar(id2) -> (Hashtbl.find table id1, Hashtbl.find table id2) 
-                              | Avar(id1), Aconst(val1) -> (Hashtbl.find table id1, val1)
-                              |Aconst(val1), Avar(id1) -> (val1, Hashtbl.find table id1)
-                              | Aconst(val1), Aconst(val2 ) -> (val1, val2)
-                                              in 
-                            match  arr1, arr2 with
-                            |VBitArray(n1), VBitArray(n2)  -> Hashtbl.add table name (VBitArray(concat n1 n2))
-                            |VBitArray(n1), VBit(s) -> Hashtbl.add table name (VBitArray(concat n1 [|s|]))
-                            |VBit(s), VBitArray(n2) -> Hashtbl.add table name (VBitArray(concat [|s|] n2))
-                            |VBit(s1), VBit(s2) -> Hashtbl.add table name (VBitArray([|s1; s2|]))
-                            )
-                                  
-  |Eslice (ind1, ind2, arg) -> (match arg with 
-                              |Avar(id1) -> (match Hashtbl.find table id1 with 
-                                            |VBitArray(n) -> (Hashtbl.add table name (VBitArray(slice n ind1 ind2)))
-                                            |_ -> failwith "pas un array on peut pas le slice")  
-                              |Aconst(val1) ->(match val1 with 
-                                            |VBitArray(n) -> Hashtbl.add table name (VBitArray(slice n ind1 ind2))
-                                            |_ -> failwith "pas un array on peut pas le slice")   )
-  |Eselect(ind1, arg) -> (match arg with 
-                          |Avar(id1) -> (match Hashtbl.find table id1 with 
-                                          |VBitArray(n) -> Hashtbl.add table name (VBit(n.(ind1)))
-                                          |VBit(s) -> Hashtbl.add table name (VBit(s)) )
-                          |Aconst(val1) -> (match val1 with 
-                                            |VBitArray(n) -> Hashtbl.add table name (VBit(n.(ind1)))
-                                            |VBit(s) -> Hashtbl.add table name (VBit(s)))   )
-  |Ereg(x) -> Hashtbl.add table name (Hashtbl.find registre x)
-  |Erom(addr_size, word_size, arg) -> (let addr1 = (match arg with 
-                                            |Avar(id1) -> (Hashtbl.find table id1 )
-                                                |Aconst(value) -> value
-                                              )
-                                                  in 
-                                              let addr = match addr1 with 
-                                              |VBit(s) -> [|s|]
-                                              |VBitArray(n) -> n in 
-                                                  Hashtbl.add table name ((Hashtbl.find roms name).(array_to_int addr))
-                                        
-
-                                             )
-                                            
-  
-  |Eram (addr_size, word_size, read_addr, write_enable, write_addr, data) -> (
-  
-                                                                    let ra1 = match read_addr with
-                                                                    | Avar(id1) -> Hashtbl.find table id1 
-                                                                    |Aconst(val1) -> val1
-                                                                    in 
-                                                                    let ra = match ra1 with 
-                                                                    |VBit(s) -> [|s|]
-                                                                    |VBitArray(n) -> n 
-                                                                    in 
-                                                                    Hashtbl.add table name ((Hashtbl.find rams name).(array_to_int ra));
-                                                                  
-                                                                    
-
+                                  |Avar(id) -> (Printf.fprintf oc "if (%s){\n\t\t\t\t %s = " id name; 
+                                                (match arg1 with
+                                                  |Avar(id1) -> Printf.fprintf oc "%s\n\t\t\t}\n" id1
+                                                  |Aconst(value) -> Printf.fprintf oc "%d\n\t\t\t}\n" (int_of_value value));
+                                                Printf.fprintf oc "\t\t\telse{\n";
+                                                (match arg2 with
+                                                  |Avar(id1) -> Printf.fprintf oc "%s\n\t\t\t}\n" id1
+                                                  |Aconst(value) -> Printf.fprintf oc "%d\n\t\t\t}\n" (int_of_value value);)
                                                   )
+                                  | Aconst(value) -> (Printf.fprintf oc "if (%d){\n\t\t\t\t %s = " (int_of_value value) name; 
+                                    (match arg1 with
+                                      |Avar(id1) -> Printf.fprintf oc "%s\n\t\t\t}\n" id1
+                                      |Aconst(value) -> Printf.fprintf oc "%d\n\t\t\t}\n" (int_of_value value));
+                                    Printf.fprintf oc "\t\t\telse{\n";
+                                    (match arg2 with
+                                      |Avar(id1) -> Printf.fprintf oc "%s\n\t\t\t}\n" id1
+                                      |Aconst(value) -> Printf.fprintf oc "%d\n\t\t\t}\n" (int_of_value value);)
+                                      )
+  )
+  |_ -> ()
 
 let rec expo x n = 
   if n = 0 then 1 else
@@ -283,14 +233,14 @@ let simulator program number_steps =
                   in 
                   Printf.fprintf oc "\t\tuint64_t %s;\n\t\tprintf(\"Donnder la valeur de %s qui a une longeur %d: \");\n\t\tscanf(\"%%ld\", &%s);\n \t\t%s = binaryToDecimal(%s);\n"elem elem length elem elem elem;
       ) prog_order.p_inputs;
-    (*List.iter (fun exp -> deal_with_exp exp variables types registres rams roms ) prog_order.p_eqs;*)
+    List.iter (fun exp -> deal_with_exp exp  types ) prog_order.p_eqs;
 
     (*Mise a jour des rams*)
     List.iter (fun (name, elem) -> match elem with 
     |Eram (addr_size, word_size, _, _, _, _) -> Printf.fprintf oc "\t\t if(%s_we){\n\t\t\trom_%s[%s_wa] = %s_data ;\n\t\t}\n" name name name name;
     | _ -> ())  prog_order.p_eqs;
  (* print les res, mettre a jour les registres*)
-    List.iter (fun id -> Printf.fprintf oc "\t\tprintf(\"%s=%%ld\", %s );\n" id id) prog_order.p_outputs;
+    List.iter (fun id -> Printf.fprintf oc "\t\tprintf(\"%s=%%ld\\n\", %s );\n" id id) prog_order.p_outputs;
     List.iter (fun (name, elem) -> match elem with 
                 |Ereg(x) -> (Printf.fprintf oc "\t\treg_%s_a = reg_%s_n;\n" name name) 
                 |_ -> ()) prog_order.p_eqs;
