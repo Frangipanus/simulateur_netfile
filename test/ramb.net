@@ -1,5 +1,5 @@
-INPUT ra, we, wa,  w_inp
-OUTPUT o
+INPUT   w_inp
+OUTPUT o, x
 VAR
    _l_10_22, _l_10_35, _l_10_48, _l_10_61, _l_11_21, _l_11_34, _l_11_47, 
   _l_11_60, _l_12_20 : 3, _l_12_33 : 2, _l_12_46 : 1, _l_13_19 : 3, _l_13_32 : 2, 
@@ -7,5 +7,6 @@ VAR
   _l_9_23, _l_9_36, _l_9_49, _l_9_62, c : 4, o : 4, ra : 2, wa : 2, we, w_inp : 4
   
 IN
-o = RAM 2 4 ra we wa w_inp
+o = w_inp
+x = SLICE 1 1 o
 
