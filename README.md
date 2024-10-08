@@ -30,3 +30,14 @@ au début de la simulation.
 J'ai choisit d'avoir plusieur RAMs et ROMs. Ainsi, il y a 3 tables de hashage pour la mémoire: celle des registres, celle des RAMs et celle des ROMs. Elle sont a chaque fois identifié par leur nom (donc un ident). 
 ### 3. Mise à jour de la mémoire
 Comme préciser plus tot, on ecrit dans les registres et dans la RAM qu'en fin de cycle, après avoir imprimé les outputs demandés.
+
+## Compilation 
+Taper d'abord 
+```console
+ocamlbuild netlist_simulator.byte
+```
+
+Puis 
+```console
+./netlist_simulator.byte path_to_test
+```
